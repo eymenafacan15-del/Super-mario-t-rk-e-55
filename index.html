@@ -3,61 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Süper Mario: 5. Sınıf Türkçe Serüveni</title>
+    <title>Süper Mario: 1 GB Animasyon Edisyonu</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-        
-        body { margin: 0; overflow: hidden; background: #5c94fc; font-family: 'Press Start 2P', cursive; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Press Start 2P', cursive; touch-action: none; }
         canvas { display: block; image-rendering: pixelated; }
+        
+        #ui { position: absolute; top: 15px; width: 100%; display: flex; justify-content: space-around; color: #fff; font-size: 12px; z-index: 10; pointer-events: none; text-shadow: 2px 2px #ff0000; }
 
-        /* Arayüz (GUI) */
-        #gui { 
-            position: absolute; top: 15px; width: 100%; display: flex; 
-            justify-content: space-around; color: white; font-size: 14px; 
-            text-shadow: 3px 3px #000; z-index: 10; pointer-events: none;
+        /* AKILLI TAHTA DEV KONTROLLER */
+        .controls { position: fixed; bottom: 0; width: 100%; height: 200px; display: flex; justify-content: space-between; padding: 20px; box-sizing: border-box; z-index: 100; pointer-events: none; }
+        .btn { 
+            width: 110px; height: 110px; background: rgba(255,255,255,0.1); 
+            border: 5px solid #fff; border-radius: 20px; display: flex; 
+            align-items: center; justify-content: center; color: white; 
+            font-size: 40px; pointer-events: auto; user-select: none;
+            box-shadow: 0 8px 0 #444;
         }
-
-        /* Türkçe Soru Paneli */
-        #quiz-box {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: #f1c40f; border: 6px solid #fff; padding: 25px;
-            display: none; flex-direction: column; align-items: center;
-            z-index: 1000; box-shadow: 0 0 0 1000px rgba(0,0,0,0.85);
-            width: 85%; max-width: 550px; border-radius: 15px;
-        }
-        .q-text { color: #000; margin-bottom: 25px; text-align: center; line-height: 1.6; font-size: 14px; }
-        .ans-btn {
-            background: #273c75; color: white; border: 4px solid #fff; padding: 12px;
-            margin: 8px; width: 100%; cursor: pointer; font-family: 'Press Start 2P';
-            font-size: 11px; transition: 0.2s;
-        }
-        .ans-btn:hover { background: #eb2f06; transform: scale(1.03); }
-
-        /* Mobil Kontroller */
-        .controls { position: fixed; bottom: 30px; width: 100%; display: flex; justify-content: space-between; padding: 0 30px; box-sizing: border-box; z-index: 100; pointer-events: none; }
-        .btn { width: 75px; height: 75px; background: rgba(255,255,255,0.25); border: 4px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; pointer-events: auto; user-select: none; }
-        #btn-jump { height: 100px; width: 90px; border-radius: 25px; background: #2ecc71; }
+        .btn:active { transform: translateY(5px); box-shadow: none; background: rgba(255,255,0,0.3); }
+        #jump { width: 220px; height: 130px; background: #2ecc71; box-shadow: 0 8px 0 #27ae60; }
     </style>
 </head>
 <body>
 
-<div id="gui">
-    <div>PUAN<br><span id="sc">000000</span></div>
-    <div>CAN<br><span id="lv">3</span></div>
-    <div>MESAFE<br><span id="dist">0m</span></div>
-</div>
-
-<div id="quiz-box">
-    <div class="q-text" id="q-content">Soru yükleniyor...</div>
-    <div id="q-options" style="width: 100%;"></div>
+<div id="ui">
+    <div>MESAFE: <span id="dist">0</span>m</div>
+    <div>ÖLÜM: <span id="lv">0</span></div>
+    <div>CANAVAR TİPİ: <span id="etype">RADİKAL</span></div>
 </div>
 
 <div class="controls">
-    <div style="display:flex; gap:12px;">
+    <div style="display:flex; gap:25px;">
         <div class="btn" id="left">◀</div>
         <div class="btn" id="right">▶</div>
     </div>
-    <div class="btn" id="btn-jump">ZIPLA</div>
+    <div class="btn" id="jump">ZIPLA!</div>
 </div>
 
 <canvas id="game"></canvas>
@@ -68,179 +48,165 @@ const ctx = canvas.getContext('2d');
 let W = canvas.width = window.innerWidth;
 let H = canvas.height = window.innerHeight;
 
-let score = 0, lives = 3, camX = 0, isPaused = false;
+// --- FİZİK VE DÜNYA ---
+const config = { gravity: 1.1, accel: 0.6, friction: 0.85, jumpForce: -23, maxSpeed: 9 };
+let deaths = 0, camX = 0, frameCount = 0;
 const keys = { a: false, d: false, w: false };
 
-// --- 5. SINIF TÜRKÇE SORU HAVUZU ---
-const questions = [
-    { q: "Hangisi 'mecaz' anlamda kullanılmıştır?", a: ["Hava çok soğuk.", "Ona ağır sözler söyledim.", "Bardak yere düştü."], c: "Ona ağır sözler söyledim." },
-    { q: "Hangi kelimede 'ünlü düşmesi' vardır?", a: ["Kitabı", "Aklı", "Yavaşça"], c: "Aklı" },
-    { q: "Hangisi bir 'terim' anlamlı sözcüktür?", a: ["Nota", "Kapı", "Elma"], c: "Nota" },
-    { q: "Hangisi 'nesnel' bir yargıdır?", a: ["Mavi en güzel renktir.", "Türkiye'nin başkenti Ankara'dır.", "Ders çalışmak eğlencelidir."], c: "Türkiye'nin başkenti Ankara'dır." },
-    { q: "Hangisinde 'ünsüz yumuşaması' olmuştur?", a: ["Ağacı", "Sertçe", "Gözlük"], c: "Ağacı" },
-    { q: "Zıt anlamlı kelime çifti hangisidir?", a: ["Siyah-Kara", "Hızlı-Yavaş", "Okul-Mektep"], c: "Hızlı-Yavaş" }
-];
+const worldSize = 150000; // Devasa harita
+const platforms = [];
+const enemies = [];
+const stars = [];
 
-// --- DEVASA HARİTA MOTORU ---
-const map = {
-    platforms: [],
-    enemies: [],
-    clouds: [],
-    size: 60000 // Devasa uzunluk (GitHub için 1GB hissi)
-};
+// Harita Üretimi
+function init() {
+    for(let i=0; i<200; i++) stars.push({x: Math.random()*W, y: Math.random()*H, s: Math.random()*2});
+    
+    platforms.push({x: 0, y: H-80, w: 1200, h: 80, c: '#444'});
+    for(let i=1200; i < worldSize; i += 450) {
+        let py = H - 180 - (Math.random() * 320);
+        let pw = 100 + (Math.random() * 150);
+        platforms.push({x: i, y: py, w: pw, h: 40, c: `hsl(${i%360}, 30%, 40%)`});
 
-function initWorld() {
-    for(let i=0; i < map.size; i += 200) {
-        // Zemin ve Çukurlar
-        if(i < 1000 || Math.random() > 0.15) {
-            map.platforms.push({x: i, y: H-100, w: 202, h: 100, t: 'ground'});
-        }
-        // Bulutlar
-        if(i % 800 === 0) map.clouds.push({x: i, y: 100 + Math.random()*150, w: 150});
-        // Objeler (Soru Blokları ve Borular)
-        if(i > 600 && i % 400 === 0) {
-            let type = Math.random() > 0.4 ? 'quiz' : 'pipe';
-            map.platforms.push({x: i, y: type === 'quiz' ? H-300 : H-180, w: 60, h: type === 'quiz' ? 60 : 80, t: type});
-            // Düşmanlar
-            if(Math.random() > 0.4) map.enemies.push({x: i + 150, y: H-150, w: 50, h: 50, d: -1, dead: false});
-        }
+        // 100 Çeşit Canavar (Renk, Boyut ve Hız varyasyonları)
+        enemies.push({
+            x: i + 20, y: py - 60,
+            w: 30 + (Math.random()*40), h: 30 + (Math.random()*40),
+            vx: (2 + Math.random()*5) * (Math.random() > 0.5 ? 1 : -1),
+            color: `hsl(${Math.random()*360}, 80%, 50%)`,
+            startX: i, range: pw - 40, dead: false
+        });
     }
 }
-initWorld();
+init();
 
-const player = { x: 150, y: 0, vx: 0, vy: 0, w: 45, h: 75, ground: false, dir: 1, big: false, bigTimer: 0 };
-
-// --- MOBİL & KLAVYE KONTROL ---
-const setupBtn = (id, k) => {
-    const el = document.getElementById(id);
-    el.onmousedown = el.ontouchstart = (e) => { e.preventDefault(); keys[k] = true; };
-    el.onmouseup = el.ontouchend = (e) => { e.preventDefault(); keys[k] = false; };
+const mario = {
+    x: 150, y: H-300, vx: 0, vy: 0, w: 40, h: 70,
+    ground: false, dir: 1, 
+    legAngle: 0, armAngle: 0, isBlinking: false
 };
-setupBtn('left', 'a'); setupBtn('right', 'd'); setupBtn('btn-jump', 'w');
 
-window.onkeydown = e => { const k = e.key.toLowerCase(); if(k==='a' || k==='arrowleft') keys.a=true; if(k==='d' || k==='arrowright') keys.d=true; if(k==='w' || k===' ' || k==='arrowup') keys.w=true; };
-window.onkeyup = e => { const k = e.key.toLowerCase(); if(k==='a' || k==='arrowleft') keys.a=false; if(k==='d' || k==='arrowright') keys.d=false; if(k==='w' || k===' ' || k==='arrowup') keys.w=false; };
-
-function showQuiz() {
-    isPaused = true;
-    const q = questions[Math.floor(Math.random() * questions.length)];
-    const box = document.getElementById('quiz-box');
-    const opts = document.getElementById('q-options');
-    box.style.display = 'flex';
-    document.getElementById('q-content').innerText = q.q;
-    opts.innerHTML = '';
-    
-    q.a.forEach(choice => {
-        const btn = document.createElement('button');
-        btn.className = 'ans-btn';
-        btn.innerText = choice;
-        btn.onclick = () => {
-            if(choice === q.c) {
-                score += 1000;
-                player.big = true;
-                player.bigTimer = 600; // 10 saniye devlik
-            } else {
-                lives--;
-            }
-            box.style.display = 'none';
-            isPaused = false;
-            requestAnimationFrame(loop);
-        };
-        opts.appendChild(btn);
-    });
-}
-
-function update() {
-    if(isPaused) return;
-
-    if(keys.a) { player.vx -= 0.8; player.dir = -1; }
-    else if(keys.d) { player.vx += 0.8; player.dir = 1; }
-    else player.vx *= 0.88;
-
-    if(keys.w && player.ground) { player.vy = -21; player.ground = false; }
-    
-    player.vy += 1.1;
-    player.x += player.vx;
-    player.y += player.vy;
-
-    let pW = player.big ? 75 : 45;
-    let pH = player.big ? 110 : 75;
-
-    player.ground = false;
-    map.platforms.forEach(p => {
-        // Üstüne Basma
-        if(player.x + pW > p.x && player.x < p.x + p.w && player.y + pH > p.y && player.y + pH < p.y + p.h + player.vy && player.vy >= 0) {
-            player.y = p.y - pH; player.vy = 0; player.ground = true;
-        }
-        // Soru Bloğuna Alttan Vurma
-        if(p.t === 'quiz' && player.vy < 0 && player.x + pW > p.x && player.x < p.x + p.w && player.y < p.y + p.h && player.y > p.y) {
-            player.vy = 3; showQuiz();
-        }
-    });
-
-    map.enemies.forEach(e => {
-        if(e.dead) return;
-        e.x += e.d * 2.5;
-        if(Math.abs(player.x - e.x) < pW && Math.abs(player.y - e.y) < pH) {
-            if(player.vy > 1 || player.big) { e.dead = true; score += 250; player.vy = -12; }
-            else { lives--; player.x -= 250; player.y -= 20; }
-        }
-    });
-
-    if(player.bigTimer > 0) {
-        player.bigTimer--;
-        if(player.bigTimer === 0) player.big = false;
+function drawMario(x, y) {
+    frameCount++;
+    // Animasyon hesaplama
+    if (Math.abs(mario.vx) > 0.5 && mario.ground) {
+        mario.legAngle = Math.sin(frameCount * 0.2) * 15;
+        mario.armAngle = Math.cos(frameCount * 0.2) * 20;
+    } else {
+        mario.legAngle = 0;
+        mario.armAngle = 0;
     }
+    mario.isBlinking = frameCount % 150 < 10;
 
-    if(player.y > H + 100) { lives--; player.x -= 300; player.y = 0; }
-    if(lives <= 0) { alert("OYUN BİTTİ! Skorun: " + score); location.reload(); }
-
-    camX += (player.x - camX - W/3) * 0.1;
-    document.getElementById('sc').innerText = score.toString().padStart(6, '0');
-    document.getElementById('lv').innerText = lives;
-    document.getElementById('dist').innerText = Math.floor(player.x/15) + "m";
-}
-
-function draw() {
-    ctx.clearRect(0,0,W,H);
-    
-    // Bulutlar
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    map.clouds.forEach(c => ctx.fillRect(c.x - camX*0.4, c.y, c.w, 45));
-
-    // Platformlar
-    map.platforms.forEach(p => {
-        if(p.t === 'quiz') ctx.fillStyle = '#f1c40f';
-        else if(p.t === 'pipe') ctx.fillStyle = '#2ecc71';
-        else ctx.fillStyle = '#e67e22';
-        
-        ctx.fillRect(p.x - camX, p.y, p.w, p.h);
-        if(p.t === 'quiz') { ctx.fillStyle = '#000'; ctx.font = '20px Arial'; ctx.fillText('?', p.x-camX+22, p.y+40); }
-    });
-
-    // Düşmanlar
-    ctx.fillStyle = '#8e44ad';
-    map.enemies.forEach(e => { if(!e.dead) ctx.fillRect(e.x - camX, e.y, e.w, e.h); });
-
-    // YAKIŞIKLI MARİO ÇİZİMİ
-    let pW = player.big ? 75 : 45;
-    let pH = player.big ? 110 : 75;
     ctx.save();
-    ctx.translate(player.x - camX + (player.dir === -1 ? pW : 0), player.y);
-    if(player.dir === -1) ctx.scale(-1, 1);
-    
-    // Karakter Detayları
-    ctx.fillStyle = '#273c75'; ctx.fillRect(8, pH/1.8, pW-16, pH/2.2); // Tulum
-    ctx.fillStyle = '#ffccac'; ctx.fillRect(pW/4, 10, pW/2, pH/3); // Yüz
-    ctx.fillStyle = player.big ? '#2ecc71' : '#eb2f06'; ctx.fillRect(4, 0, pW-8, 14); // Şapka
-    ctx.fillStyle = '#331a00'; ctx.fillRect(pW/2+4, pH/4, 12, 6); // Yakışıklı Bıyık
-    
+    ctx.translate(x + (mario.dir === -1 ? mario.w : 0), y);
+    if(mario.dir === -1) ctx.scale(-1, 1);
+
+    // 1. Ayaklar (Yürüme animasyonu)
+    ctx.fillStyle = '#4a2700';
+    ctx.fillRect(5 + mario.legAngle/2, mario.h - 15, 15, 15); // Sol
+    ctx.fillRect(mario.w - 20 - mario.legAngle/2, mario.h - 15, 15, 15); // Sağ
+
+    // 2. Kırmızı Tişört ve Tulum
+    ctx.fillStyle = '#eb2f06'; // Tişört
+    ctx.fillRect(5, 25, mario.w - 10, 30);
+    ctx.fillStyle = '#273c75'; // Mavi Tulum
+    ctx.fillRect(8, 40, mario.w - 16, 20);
+
+    // 3. Kollar
+    ctx.fillStyle = '#eb2f06';
+    ctx.save();
+    ctx.translate(mario.w/2, 35);
+    ctx.rotate(mario.armAngle * Math.PI / 180);
+    ctx.fillRect(-5, 0, 10, 20); // Kol
+    ctx.restore();
+
+    // 4. Kafa ve Ten
+    ctx.fillStyle = '#ffccac';
+    ctx.fillRect(8, 0, mario.w - 16, 28);
+
+    // 5. Göz ve Bıyık (Animasyonlu)
+    if(!mario.isBlinking) {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(mario.w - 18, 8, 5, 8); // Göz
+    }
+    ctx.fillStyle = '#331a00';
+    ctx.fillRect(mario.w - 15, 18, 12, 5); // Yakışıklı Bıyık
+
+    // 6. Şapka
+    ctx.fillStyle = '#eb2f06';
+    ctx.fillRect(5, -5, mario.w - 5, 10);
+
     ctx.restore();
 }
 
-function loop() { update(); draw(); if(!isPaused) requestAnimationFrame(loop); }
-loop();
-window.onresize = () => { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; };
-</script>
-</body>
-</html>
+function update() {
+    if(keys.a) { mario.vx -= config.accel; mario.dir = -1; }
+    else if(keys.d) { mario.vx += config.accel; mario.dir = 1; }
+    else { mario.vx *= config.friction; }
+
+    if(keys.w && mario.ground) { mario.vy = config.jumpForce; mario.ground = false; }
+    mario.vy += config.gravity;
+    
+    mario.x += mario.vx;
+    mario.y += mario.vy;
+
+    // Çarpışmalar
+    mario.ground = false;
+    platforms.forEach(p => {
+        if(mario.x + mario.w > p.x && mario.x < p.x + p.w && 
+           mario.y + mario.h > p.y && mario.y + mario.h < p.y + p.h + mario.vy && mario.vy >= 0) {
+            mario.y = p.y - mario.h; mario.vy = 0; mario.ground = true;
+        }
+    });
+
+    enemies.forEach(e => {
+        if(e.dead) return;
+        e.x += e.vx;
+        if(e.x < e.startX || e.x > e.startX + e.range) e.vx *= -1;
+
+        if(mario.x + mario.w > e.x && mario.x < e.x + e.w && 
+           mario.y + mario.h > e.y && mario.y < e.y + e.h) {
+            if(mario.vy > 5) { e.dead = true; mario.vy = -18; }
+            else { die(); }
+        }
+    });
+
+    if(mario.y > H + 100) die();
+    camX += (mario.x - camX - W/4) * 0.1;
+
+    // UI Güncelleme
+    document.getElementById('dist').innerText = Math.floor(mario.x / 20);
+    document.getElementById('lv').innerText = deaths;
+}
+
+function die() {
+    deaths++;
+    mario.x = Math.max(100, mario.x - 600);
+    mario.y = H - 500;
+    mario.vx = 0; mario.vy = 0;
+}
+
+function draw() {
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0,0,W,H);
+    
+    // Yıldızlar (Paralaks Efekti)
+    ctx.fillStyle = '#fff';
+    stars.forEach(s => ctx.fillRect((s.x - camX*0.1) % W, s.y, s.s, s.s));
+
+    // Platformlar
+    platforms.forEach(p => {
+        if(p.x - camX < W && p.x + p.w - camX > -W) {
+            ctx.fillStyle = p.c;
+            ctx.fillRect(p.x - camX, p.y, p.w, p.h);
+            ctx.fillStyle = 'rgba(255,255,255,0.1)';
+            ctx.fillRect(p.x - camX, p.y, p.w, 5);
+        }
+    });
+
+    // Canavarlar
+    enemies.forEach(e => {
+        if(!e.dead && e.x - camX < W && e.x + e.w - camX > -W) {
+            ctx.fillStyle = e.color;
+            ctx.fillRect(e.
