@@ -3,41 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Süper Mario: 1 GB Animasyon Edisyonu</title>
+    <title>Süper Mario: Doku ve Varyasyon Edisyonu</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Press Start 2P', cursive; touch-action: none; }
+        body { margin: 0; overflow: hidden; background: #5c94fc; font-family: 'Press Start 2P', cursive; touch-action: none; }
         canvas { display: block; image-rendering: pixelated; }
         
-        #ui { position: absolute; top: 15px; width: 100%; display: flex; justify-content: space-around; color: #fff; font-size: 12px; z-index: 10; pointer-events: none; text-shadow: 2px 2px #ff0000; }
+        #ui { position: absolute; top: 15px; width: 100%; display: flex; justify-content: space-around; color: white; font-size: 12px; z-index: 10; pointer-events: none; text-shadow: 3px 3px #000; }
 
         /* AKILLI TAHTA DEV KONTROLLER */
-        .controls { position: fixed; bottom: 0; width: 100%; height: 200px; display: flex; justify-content: space-between; padding: 20px; box-sizing: border-box; z-index: 100; pointer-events: none; }
+        .controls { position: fixed; bottom: 0; width: 100%; height: 220px; display: flex; justify-content: space-between; padding: 25px; box-sizing: border-box; z-index: 100; pointer-events: none; }
         .btn { 
-            width: 110px; height: 110px; background: rgba(255,255,255,0.1); 
-            border: 5px solid #fff; border-radius: 20px; display: flex; 
+            width: 120px; height: 120px; background: rgba(0,0,0,0.4); 
+            border: 6px solid #fff; border-radius: 25px; display: flex; 
             align-items: center; justify-content: center; color: white; 
-            font-size: 40px; pointer-events: auto; user-select: none;
-            box-shadow: 0 8px 0 #444;
+            font-size: 45px; pointer-events: auto; user-select: none;
+            box-shadow: 0 10px 0 #333; transition: 0.1s;
         }
-        .btn:active { transform: translateY(5px); box-shadow: none; background: rgba(255,255,0,0.3); }
-        #jump { width: 220px; height: 130px; background: #2ecc71; box-shadow: 0 8px 0 #27ae60; }
+        .btn:active { transform: translateY(8px); box-shadow: none; background: rgba(255,255,0,0.3); }
+        #jump { width: 250px; height: 140px; background: #e74c3c; box-shadow: 0 10px 0 #a93226; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div>MESAFE: <span id="dist">0</span>m</div>
-    <div>ÖLÜM: <span id="lv">0</span></div>
-    <div>CANAVAR TİPİ: <span id="etype">RADİKAL</span></div>
+    <div>DÜNYA<br>1-1</div>
+    <div>MARİO<br><span id="sc">000000</span></div>
+    <div>ÖLÜM<br><span id="lv">0</span></div>
 </div>
 
 <div class="controls">
-    <div style="display:flex; gap:25px;">
+    <div style="display:flex; gap:30px;">
         <div class="btn" id="left">◀</div>
         <div class="btn" id="right">▶</div>
     </div>
-    <div class="btn" id="jump">ZIPLA!</div>
+    <div class="btn" id="jump">↑</div>
 </div>
 
 <canvas id="game"></canvas>
@@ -48,114 +48,138 @@ const ctx = canvas.getContext('2d');
 let W = canvas.width = window.innerWidth;
 let H = canvas.height = window.innerHeight;
 
-// --- FİZİK VE DÜNYA ---
-const config = { gravity: 1.1, accel: 0.6, friction: 0.85, jumpForce: -23, maxSpeed: 9 };
-let deaths = 0, camX = 0, frameCount = 0;
+// --- FİZİK VE AYARLAR ---
+const config = { gravity: 1.1, accel: 0.7, friction: 0.85, jumpForce: -24, maxSpeed: 10 };
+let deaths = 0, camX = 0, frameCount = 0, score = 0;
 const keys = { a: false, d: false, w: false };
 
-const worldSize = 150000; // Devasa harita
 const platforms = [];
 const enemies = [];
-const stars = [];
+const background = [];
 
-// Harita Üretimi
-function init() {
-    for(let i=0; i<200; i++) stars.push({x: Math.random()*W, y: Math.random()*H, s: Math.random()*2});
+// --- DOKU VE RENDER MOTORU ---
+
+// 1. Mario Pixel Art Çizimi
+function drawMario(x, y, pw, ph) {
+    ctx.save();
+    ctx.translate(x + (mario.dir === -1 ? pw : 0), y);
+    if(mario.dir === -1) ctx.scale(-1, 1);
     
-    platforms.push({x: 0, y: H-80, w: 1200, h: 80, c: '#444'});
-    for(let i=1200; i < worldSize; i += 450) {
-        let py = H - 180 - (Math.random() * 320);
-        let pw = 100 + (Math.random() * 150);
-        platforms.push({x: i, y: py, w: pw, h: 40, c: `hsl(${i%360}, 30%, 40%)`});
+    let walk = (Math.abs(mario.vx) > 0.5 && mario.ground) ? Math.sin(frameCount * 0.25) * 15 : 0;
+    
+    // Ayakkabılar (Kahverengi)
+    ctx.fillStyle = '#4a2700';
+    ctx.fillRect(5 + walk/2, ph - 15, 18, 15); ctx.fillRect(pw - 23 - walk/2, ph - 15, 18, 15);
+    
+    // Tulum (Mavi)
+    ctx.fillStyle = '#273c75'; ctx.fillRect(8, 35, pw - 16, ph - 50);
+    
+    // Tişört (Kırmızı)
+    ctx.fillStyle = '#eb2f06'; ctx.fillRect(5, 20, pw - 10, 20);
+    
+    // Kafa ve Ten
+    ctx.fillStyle = '#ffccac'; ctx.fillRect(12, 0, pw - 24, 30);
+    
+    // Göz ve Bıyık (Detaylı)
+    let blink = frameCount % 120 < 10;
+    if(!blink) { ctx.fillStyle = '#000'; ctx.fillRect(pw-20, 8, 6, 10); } 
+    ctx.fillStyle = '#331a00'; ctx.fillRect(pw-18, 20, 15, 6); // Bıyık
+    
+    // Şapka (Kırmızı ve Beyaz Logo)
+    ctx.fillStyle = '#eb2f06'; ctx.fillRect(8, -8, pw - 16, 14);
+    ctx.fillStyle = '#fff'; ctx.fillRect(pw - 20, -4, 8, 6);
 
-        // 100 Çeşit Canavar (Renk, Boyut ve Hız varyasyonları)
-        enemies.push({
-            x: i + 20, y: py - 60,
-            w: 30 + (Math.random()*40), h: 30 + (Math.random()*40),
-            vx: (2 + Math.random()*5) * (Math.random() > 0.5 ? 1 : -1),
-            color: `hsl(${Math.random()*360}, 80%, 50%)`,
-            startX: i, range: pw - 40, dead: false
-        });
+    ctx.restore();
+}
+
+// 2. Doku (Texture) Çizim Fonksiyonları
+function drawBrick(x, y, w, h) {
+    ctx.fillStyle = '#e67e22'; ctx.fillRect(x, y, w, h); // Tuğla rengi
+    ctx.fillStyle = '#a93226';
+    for(let i=0; i<w; i+=10) ctx.fillRect(x+i, y, 1, h); // Dikey çizgiler
+    for(let i=0; i<h; i+=10) ctx.fillRect(x, y+i, w, 1); // Yatay çizgiler
+}
+
+function drawPipe(x, y, w, h) {
+    ctx.fillStyle = '#2ecc71'; ctx.fillRect(x, y, w, h); // Boru gövdesi
+    ctx.fillStyle = '#27ae60'; ctx.fillRect(x, y, w*0.15, h); // Gölge
+    ctx.fillStyle = '#27ae60'; ctx.fillRect(x - 5, y, w + 10, 25); // Boru kafası
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.strokeRect(x - 5, y, w + 10, 25); // Kafa çerçevesi
+}
+
+function drawEnemy(e, x, y) {
+    if(e.dead) return;
+    let anim = Math.sin(frameCount * 0.2 + e.startX) * 10; // Yürüme animasyonu
+    ctx.save();
+    ctx.translate(x, y + anim/2);
+    
+    // Canavar Tipi 1 (Goomba Tarzı Varyasyon)
+    ctx.fillStyle = e.color; 
+    ctx.fillRect(0, 0, e.w, e.h); // Vücut
+    
+    ctx.fillStyle = '#fff'; ctx.fillRect(8, 8, e.w/4, e.h/4); // Göz 1
+    ctx.fillStyle = '#fff'; ctx.fillRect(e.w - 18, 8, e.w/4, e.h/4); // Göz 2
+    ctx.fillStyle = '#000'; ctx.fillRect(10 + Math.sin(frameCount*0.1)*3, 10, 5, 5); // Gözbebeği
+    
+    // Kaşlar (Hardcore görünüm için)
+    ctx.fillStyle = '#000'; ctx.fillRect(5, 4, e.w - 10, 4);
+    
+    ctx.restore();
+}
+
+function drawCloud(x, y) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.fillRect(x, y, 100, 30);
+    ctx.fillRect(x + 20, y - 15, 60, 15);
+}
+
+// Devasa Harita ve 100 Çeşit Canavar Üretimi
+function init() {
+    // Arka Plan Dekor (Bulutlar)
+    for(let i=0; i<100; i++) background.push({x: i*400, y: 100 + Math.random()*200});
+
+    // Zemin ve Objeler
+    platforms.push({x: 0, y: H-80, w: worldSize, h: 80, t: 'ground'}); // Sonsuz Zemin
+    for(let i=1000; i < worldSize; i += 500) {
+        let py = H - 180 - (Math.random() * 300);
+        let pw = 100 + (Math.random() * 180);
+        let type = Math.random() > 0.4 ? 'brick' : 'pipe';
+        platforms.push({x: i, y: py, w: type==='pipe'?60:pw, h: type==='pipe'?80:40, t: type});
+
+        // Rastgele 100+ Canavar (Renk, Boyut, Hız varyasyonları)
+        if(Math.random() > 0.3) {
+            enemies.push({
+                x: i + 30, y: py - 70,
+                w: 40 + Math.random()*30, h: 40 + Math.random()*30,
+                vx: (3 + Math.random()*5) * (Math.random() > 0.5 ? 1 : -1),
+                color: `hsl(${Math.random()*360}, 80%, 50%)`,
+                startX: i, range: type==='pipe'?0:pw - 50, dead: false
+            });
+        }
     }
 }
+const worldSize = 100000;
 init();
 
 const mario = {
-    x: 150, y: H-300, vx: 0, vy: 0, w: 40, h: 70,
-    ground: false, dir: 1, 
-    legAngle: 0, armAngle: 0, isBlinking: false
+    x: 200, y: H-300, vx: 0, vy: 0, w: 45, h: 80,
+    ground: false, dir: 1
 };
 
-function drawMario(x, y) {
-    frameCount++;
-    // Animasyon hesaplama
-    if (Math.abs(mario.vx) > 0.5 && mario.ground) {
-        mario.legAngle = Math.sin(frameCount * 0.2) * 15;
-        mario.armAngle = Math.cos(frameCount * 0.2) * 20;
-    } else {
-        mario.legAngle = 0;
-        mario.armAngle = 0;
-    }
-    mario.isBlinking = frameCount % 150 < 10;
-
-    ctx.save();
-    ctx.translate(x + (mario.dir === -1 ? mario.w : 0), y);
-    if(mario.dir === -1) ctx.scale(-1, 1);
-
-    // 1. Ayaklar (Yürüme animasyonu)
-    ctx.fillStyle = '#4a2700';
-    ctx.fillRect(5 + mario.legAngle/2, mario.h - 15, 15, 15); // Sol
-    ctx.fillRect(mario.w - 20 - mario.legAngle/2, mario.h - 15, 15, 15); // Sağ
-
-    // 2. Kırmızı Tişört ve Tulum
-    ctx.fillStyle = '#eb2f06'; // Tişört
-    ctx.fillRect(5, 25, mario.w - 10, 30);
-    ctx.fillStyle = '#273c75'; // Mavi Tulum
-    ctx.fillRect(8, 40, mario.w - 16, 20);
-
-    // 3. Kollar
-    ctx.fillStyle = '#eb2f06';
-    ctx.save();
-    ctx.translate(mario.w/2, 35);
-    ctx.rotate(mario.armAngle * Math.PI / 180);
-    ctx.fillRect(-5, 0, 10, 20); // Kol
-    ctx.restore();
-
-    // 4. Kafa ve Ten
-    ctx.fillStyle = '#ffccac';
-    ctx.fillRect(8, 0, mario.w - 16, 28);
-
-    // 5. Göz ve Bıyık (Animasyonlu)
-    if(!mario.isBlinking) {
-        ctx.fillStyle = '#000';
-        ctx.fillRect(mario.w - 18, 8, 5, 8); // Göz
-    }
-    ctx.fillStyle = '#331a00';
-    ctx.fillRect(mario.w - 15, 18, 12, 5); // Yakışıklı Bıyık
-
-    // 6. Şapka
-    ctx.fillStyle = '#eb2f06';
-    ctx.fillRect(5, -5, mario.w - 5, 10);
-
-    ctx.restore();
-}
-
 function update() {
+    frameCount++;
     if(keys.a) { mario.vx -= config.accel; mario.dir = -1; }
     else if(keys.d) { mario.vx += config.accel; mario.dir = 1; }
     else { mario.vx *= config.friction; }
 
     if(keys.w && mario.ground) { mario.vy = config.jumpForce; mario.ground = false; }
     mario.vy += config.gravity;
-    
     mario.x += mario.vx;
     mario.y += mario.vy;
 
-    // Çarpışmalar
     mario.ground = false;
     platforms.forEach(p => {
-        if(mario.x + mario.w > p.x && mario.x < p.x + p.w && 
-           mario.y + mario.h > p.y && mario.y + mario.h < p.y + p.h + mario.vy && mario.vy >= 0) {
+        if(mario.x + mario.w > p.x && mario.x < p.x + p.w && mario.y + mario.h > p.y && mario.y + mario.h < p.y + p.h + mario.vy && mario.vy >= 0) {
             mario.y = p.y - mario.h; mario.vy = 0; mario.ground = true;
         }
     });
@@ -163,50 +187,70 @@ function update() {
     enemies.forEach(e => {
         if(e.dead) return;
         e.x += e.vx;
-        if(e.x < e.startX || e.x > e.startX + e.range) e.vx *= -1;
-
-        if(mario.x + mario.w > e.x && mario.x < e.x + e.w && 
-           mario.y + mario.h > e.y && mario.y < e.y + e.h) {
-            if(mario.vy > 5) { e.dead = true; mario.vy = -18; }
+        if(e.range > 0 && (e.x < e.startX || e.x > e.startX + e.range)) e.vx *= -1;
+        
+        if(mario.x + mario.w > e.x && mario.x < e.x + e.w && mario.y + mario.h > e.y && mario.y < e.y + e.h) {
+            if(mario.vy > 5) { e.dead = true; mario.vy = -18; score += 200; } // Üstüne basınca ölür
             else { die(); }
         }
     });
 
     if(mario.y > H + 100) die();
-    camX += (mario.x - camX - W/4) * 0.1;
-
-    // UI Güncelleme
-    document.getElementById('dist').innerText = Math.floor(mario.x / 20);
+    camX += (mario.x - camX - W/3) * 0.1;
+    document.getElementById('sc').innerText = score.toString().padStart(6, '0');
     document.getElementById('lv').innerText = deaths;
 }
 
 function die() {
     deaths++;
-    mario.x = Math.max(100, mario.x - 600);
+    mario.x = Math.max(200, mario.x - 700);
     mario.y = H - 500;
     mario.vx = 0; mario.vy = 0;
 }
 
 function draw() {
-    ctx.fillStyle = '#0a0a1a';
-    ctx.fillRect(0,0,W,H);
-    
-    // Yıldızlar (Paralaks Efekti)
-    ctx.fillStyle = '#fff';
-    stars.forEach(s => ctx.fillRect((s.x - camX*0.1) % W, s.y, s.s, s.s));
+    ctx.clearRect(0, 0, W, H); // Arka plan (Gökyüzü)
 
-    // Platformlar
+    // Arka Plan (Paralaks Bulutlar)
+    background.forEach(c => drawCloud(c.x - camX*0.3, c.y));
+
+    // Platformlar ve Objeler (Texture)
     platforms.forEach(p => {
         if(p.x - camX < W && p.x + p.w - camX > -W) {
-            ctx.fillStyle = p.c;
-            ctx.fillRect(p.x - camX, p.y, p.w, p.h);
-            ctx.fillStyle = 'rgba(255,255,255,0.1)';
-            ctx.fillRect(p.x - camX, p.y, p.w, 5);
+            if(p.t === 'brick') drawBrick(p.x - camX, p.y, p.w, p.h);
+            else if(p.t === 'pipe') drawPipe(p.x - camX, p.y, p.w, p.h);
+            else { // Zemin
+                ctx.fillStyle = '#d35400'; ctx.fillRect(p.x - camX, p.y, p.w, p.h);
+                ctx.fillStyle = '#e67e22'; ctx.fillRect(p.x - camX, p.y, p.w, 10); // Zemin üst çizgisi
+            }
         }
     });
 
-    // Canavarlar
+    // Canavarlar (Pixel Art)
     enemies.forEach(e => {
         if(!e.dead && e.x - camX < W && e.x + e.w - camX > -W) {
-            ctx.fillStyle = e.color;
-            ctx.fillRect(e.
+            drawEnemy(e, e.x - camX, e.y);
+        }
+    });
+
+    // MARİO (Yüksek Kaliteli Pixel Art Animasyonlu)
+    drawMario(mario.x - camX, mario.y, mario.w, mario.h);
+}
+
+function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+
+// Kontroller
+const btn = (id, k) => {
+    const e = document.getElementById(id);
+    const trigger = (ev) => { ev.preventDefault(); keys[k] = true; };
+    const release = (ev) => { ev.preventDefault(); keys[k] = false; };
+    e.addEventListener('mousedown', trigger); e.addEventListener('mouseup', release);
+    e.addEventListener('touchstart', trigger); e.addEventListener('touchend', release);
+};
+btn('left','a'); btn('right','d'); btn('jump','w');
+
+gameLoop();
+window.onresize = () => { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; };
+</script>
+</body>
+</html>
