@@ -1,53 +1,117 @@
+/**
+ * MARIO JS SPRITE ENGINE
+ * Senin yüklediğin resimlerden (spritesheet) parçalar kesip çizer.
+ */
 const c = document.getElementById('g');
 const x = c.getContext('2d');
-let w, h, camX = 0, frame = 0, score = 0;
+let w, h, camX = 0, frame = 0, score = 0, lives = 3;
 
-// --- DOKULAR (BASE64 - ASLA BOZULMAZ) ---
+// --- RESİM YÜKLEME SİSTEMİ ---
+// GitHub'a yüklediğin resimlerin tam adlarını buraya yazıyoruz.
 const img = {
     mario: new Image(),
-    brick: new Image(),
-    turtle: new Image(), // Kaplumbağa
-    hammer: new Image()  // Çekiç atan
+    enemies: new Image()
 };
-img.mario.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAASUlEQVRYR+2XwREAMAQC8vunNAt4YIsZSO7nSOnS6noD8v8mYI7fALIDZAfIDpAdIDtAdpYp8Pk9IDtAdIDsLFMgX6DqS6v6FpA9u9IDmSOfvHAAAAAASUVORK5CYII=';
-img.brick.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAALUlEQVRYR+3isQ0AAAjDMCX/f2mewYI6S9rSOf6t6vMBgEBAQEBAQEBAQEAgUBy86AD9mY9mAAAAAElFTkSuQmCC';
-img.turtle.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAWElEQVRYR+2X0QoAIAhD7f8/unNgeYmSInofY6u09Ybk/03AHr8BZAOwA7IDZAOyA2RnOQXOnwdkB2QHyM5yCswX6PVp1fQtkB3AAnL0SAd8m7TzBvP6V88uM3t9ogOYI59ZjwAAAABJRU5ErkJggg==';
 
-// OYUNCU AYARLARI
-const conf = { grav: 1.1, frict: 0.85, jump: -25, speed: 2.0 };
-const p = { x: 100, y: 0, vx: 0, vy: 0, w: 45, h: 45, g: 0, d: 1 };
-const objs = [], enemies = [], projectiles = [];
+// Bu satırlar resimlerin yüklendiğini kontrol eder.
+img.mario.src = 'mario_sprites.png';
+img.enemies.src = 'enemy_sprites.png';
+
+// Resimler yüklenene kadar oyunun başlamasını engelleriz.
+let imgsLoaded = 0;
+const checkLoaded = () => {
+    imgsLoaded++;
+    if(imgsLoaded === 2) { initWorld(); loop(); }
+};
+img.mario.onload = checkLoaded;
+img.enemies.onload = checkLoaded;
+
+// FİZİK VE KONTROLLER (Mega Hız Deneyimi)
+const conf = { grav: 1.1, frict: 0.85, jump: -26, speed: 2.2 };
+const p = { x: 100, y: 0, vx: 0, vy: 0, w: 48, h: 48, g: 0, d: 1 };
+const objs = [], enemies = [];
 
 const resize = () => { w = c.width = window.innerWidth; h = c.height = window.innerHeight; };
 window.onresize = resize; resize();
 
-// DÜNYA VE ÇEŞİTLİ CANAVAR ÜRETİMİ
-const init = () => {
-    objs.push({x: 0, y: h-60, w: 50000, h: 60, t: 'ground'}); // Yer
+// HAVADA DURAN HARİTA TASARIMI
+const initWorld = () => {
+    objs.push({x: 0, y: h-60, w: 100000, h: 60, t: 'ground'}); // Dev Zemin
 
-    for(let i=1; i<150; i++) {
-        let ox = i * 500;
-        let oy = h - 250 - Math.random() * 200;
-        objs.push({x: ox, y: oy, w: 150, h: 40, t: 'brick'});
+    for(let i=1; i<200; i++) {
+        let ox = i * 450 + Math.random() * 200;
+        let oy = h - 250 - Math.random() * 300; // Eşyalar havada
+        let ow = 120 + Math.random() * 150;
+        
+        objs.push({x: ox, y: oy, w: ow, h: 40, t: 'block'});
 
-        // CANAVAR ÇEŞİTLERİ
-        let r = Math.random();
-        if(r > 0.7) { 
-            // 1. ÇEKİÇ ATAN (Hammer Bro)
-            enemies.push({ x: ox + 50, y: oy - 60, w: 50, h: 60, type: 'hammerer', lastShot: 0, vx: 1, startX: ox, range: 100 });
-        } else if(r > 0.4) {
-            // 2. ZIPLAYAN KAPLUMBAĞA (Koopa)
-            enemies.push({ x: ox + 20, y: oy - 50, w: 40, h: 40, type: 'turtle', vy: 0, vx: 2, startX: ox, range: 110 });
+        // Canavar Üretimi (SMB3 Tarzı)
+        if(Math.random() > 0.3) {
+            enemies.push({
+                x: ox + 20, y: oy - 50, w: 40, h: 40,
+                vx: 3 + Math.random() * 5,
+                startX: ox, range: ow - 40, dead: false
+            });
         }
     }
 };
 
+// --- SPRITE DRAWING ENGINE (Resim Kesme Motoru) ---
+
+/**
+ * mario_sprites.png dosyasından doğru kareyi kesip çizer.
+ */
+const drawMarioSprite = () => {
+    x.save();
+    x.translate(p.x - camX + (p.d === -1 ? p.w : 0), p.y);
+    if(p.d === -1) x.scale(-1, 1);
+    
+    // Resmin içindeki tek bir Mario karesinin boyutu (Yaklaşık 16x32 piksel)
+    // Bu değerleri resmin orijinal çözünürlüğüne göre hassas ayarlamak gerekebilir.
+    const sw = 16, sh = 32;
+    // Çizilecek kare (Yürüme animasyonu için kareyi değiştiririz)
+    let sx = 0, sy = 0; 
+
+    if(!p.g) { // Zıplama karesi
+        sx = sw * 4; // 5. kare
+    } else if(Math.abs(p.vx) > 0.1) { // Yürüme animasyonu
+        sx = sw * (Math.floor(frame / 6) % 3 + 1); // 2, 3, 4. kareler arasında döner
+    } else { // Durma karesi
+        sx = 0;
+    }
+
+    // drawImage(resim, sx, sy, sw, sh, dx, dy, dw, dh)
+    // Kaynak resimden (sx,sy) koordinatından (sw,sh) boyutunda bir parça kes,
+    // Ekranda (dx,dy) koordinatına (dw,dh) boyutunda çiz.
+    x.drawImage(img.mario, sx, sy, sw, sh, 0, 0, p.w, p.h);
+    
+    x.restore();
+};
+
+/**
+ * enemy_sprites.png dosyasından canavar/blok parçası kesip çizer.
+ */
+const drawEnemySprite = (e) => {
+    // SMB3 canavarlarını kullanıyoruz.
+    // Goomba karesi (Örnek: 10,120 koordinatından 16x16 kes)
+    const sx = 10, sy = 120, sw = 16, sh = 16;
+    x.drawImage(img.enemies, sx, sy, sw, sh, e.x - camX, e.y, e.w, e.h);
+};
+
+const drawBlockSprite = (o) => {
+    // SMB3 Tuğla karesi (Örnek: 10,10 koordinatından 16x16 kes)
+    const sx = 10, sy = 10, sw = 16, sh = 16;
+    x.drawImage(img.enemies, sx, sy, sw, sh, o.x - camX, o.y, o.w, o.h);
+};
+
+// OYUN DÖNGÜSÜ (GAME LOOP)
 const loop = () => {
     frame++;
     // Mario Fizik
-    const keys = window.keys || {l:0, r:0, u:0}; // Kontrollerden gelen veri
-    if(keys.l) { p.vx -= conf.speed; p.d = -1; } else if(keys.r) { p.vx += conf.speed; p.d = 1; } else p.vx *= conf.frict;
-    if(keys.u && p.g) { p.vy = conf.jump; p.g = 0; }
+    if(window.keys?.l) { p.vx -= conf.speed; p.d = -1; }
+    else if(window.keys?.r) { p.vx += conf.speed; p.d = 1; }
+    else p.vx *= conf.frict;
+    if(window.keys?.u && p.g) { p.vy = conf.jump; p.g = 0; }
     p.vy += conf.grav; p.x += p.vx; p.y += p.vy;
 
     // Platform Çarpışma
@@ -58,69 +122,41 @@ const loop = () => {
         }
     });
 
-    // CANAVAR MANTIĞI VE SALDIRILAR
-    enemies.forEach((e, idx) => {
+    // Canavar Mantığı
+    enemies.forEach(e => {
         if(e.dead) return;
-        
-        // Hareket devriyesi
         e.x += e.vx;
         if(e.x > e.startX + e.range || e.x < e.startX) e.vx *= -1;
-
-        // TİP 1: Hammerer (Bize çekiç fırlatır)
-        if(e.type === 'hammerer') {
-            if(frame - e.lastShot > 100) { // Her 100 karede bir atış
-                projectiles.push({ x: e.x, y: e.y, vx: (p.x < e.x ? -5 : 5), vy: -15, w: 15, h: 15 });
-                e.lastShot = frame;
-            }
-        }
-
-        // TİP 2: Turtle (Zıplayarak gelir)
-        if(e.type === 'turtle' && frame % 60 === 0) {
-            e.vy = -10; // Küçük zıplamalar
-        }
-        if(e.type === 'turtle') { e.vy += 0.5; e.y += e.vy; }
-
-        // Mario ile çarpışma
         if(p.x < e.x + e.w && p.x + p.w > e.x && p.y < e.y + e.h && p.y + p.h > e.y) {
-            if(p.vy > 5) { e.dead = true; p.vy = -15; score += 500; } 
-            else { p.x -= 300; score -= 100; } // Hasar alıp geri fırlar
+            if(p.vy > 5) { e.dead = true; p.vy = -18; score += 200; } 
+            else { lives--; p.x -= 300; if(lives <= 0) location.reload(); }
         }
-    });
-
-    // ÇEKİÇLERİN HAREKETİ (Mermi sistemi)
-    projectiles.forEach((m, mIdx) => {
-        m.vy += 0.8; m.x += m.vx; m.y += m.vy;
-        // Mario'ya çekiç çarparsa
-        if(p.x < m.x + m.w && p.x + p.w > m.x && p.y < m.y + m.h && p.y + p.h > m.y) {
-            p.x -= 200; p.y -= 10; projectiles.splice(mIdx, 1);
-        }
-        if(m.y > h) projectiles.splice(mIdx, 1);
     });
 
     camX += (p.x - camX - w/4) * 0.1;
+    if(p.y > h+100) { lives--; p.x -= 500; p.y = 0; if(lives <= 0) location.reload(); }
 
     // --- ÇİZİM ---
     x.fillStyle = '#5c94fc'; x.fillRect(0,0,w,h); // Arkaplan
 
-    objs.forEach(o => x.drawImage(img.brick, o.x - camX, o.y, o.w, o.h));
-
-    enemies.forEach(e => {
-        if(e.dead) return;
-        x.fillStyle = e.type === 'hammerer' ? '#f1c40f' : '#2ecc71';
-        x.fillRect(e.x - camX, e.y, e.w, e.h); // Canavar gövdesi
-        x.fillStyle = 'white'; x.fillRect(e.x - camX + 5, e.y + 5, 10, 10); // Göz
+    // Platformlar (Sprite ile)
+    objs.forEach(o => {
+        if(o.t === 'block') drawBlockSprite(o);
+        else { // Zemin (SMB3 çimen karesini kes)
+            const sx=100, sy=100, sw=16, sh=16;
+            x.drawImage(img.enemies, sx, sy, sw, sh, o.x - camX, o.y, o.w, o.h);
+        }
     });
 
-    projectiles.forEach(m => {
-        x.fillStyle = 'black';
-        x.beginPath(); x.arc(m.x - camX, m.y, m.w/2, 0, Math.PI*2); x.fill(); // Çekiçler (Gülle gibi)
-    });
+    // Canavarlar (Sprite ile)
+    enemies.forEach(e => { if(!e.dead) drawEnemySprite(e); });
 
-    x.save();
-    x.translate(p.x - camX + (p.d === -1 ? p.w : 0), p.y);
-    if(p.d === -1) x.scale(-1, 1);
-    x.drawImage(img.mario, 0, 0, p.w, p.h);
-    x.restore();
+    // Mario (Yüksek Kaliteli Sprite Animasyonlu)
+    drawMarioSprite();
+
+    // UI
+    x.fillStyle = "white"; x.font = "bold 20px Arial";
+    x.fillText(`PUAN: ${score}  CAN: ${lives}`, 25, 40);
 
     requestAnimationFrame(loop);
 };
@@ -129,7 +165,8 @@ const loop = () => {
 window.keys = {l:0, r:0, u:0};
 window.onkeydown = e => { if(e.key=='ArrowLeft')keys.l=1; if(e.key=='ArrowRight')keys.r=1; if(e.key==' '||e.key=='ArrowUp')keys.u=1; };
 window.onkeyup = e => { if(e.key=='ArrowLeft')keys.l=0; if(e.key=='ArrowRight')keys.r=0; if(e.key==' '||e.key=='ArrowUp')keys.u=0; };
-c.addEventListener('touchstart', e => { let tx = e.touches[0].clientX; if(tx < w/3) keys.l=1; else if(tx > w*2/3) keys.r=1; else keys.u=1; });
+c.addEventListener('touchstart', e => { let tx=e.touches[0].clientX; if(tx<w/3)keys.l=1; else if(tx>w*2/3)keys.r=1; else keys.u=1; });
 c.addEventListener('touchend', () => { keys.l=0; keys.r=0; keys.u=0; });
 
-init(); loop();
+// initWorld ve loop, resim yüklenince checkLoaded içinde çağrılır.
+</script>
